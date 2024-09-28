@@ -201,39 +201,19 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
     performance_without_cooling = 100 - (temp_without - 70) * 0.5
     performance_with_cooling = 100 - (temp_with - 70) * 0.5
     fig_perf = go.Figure()
-    fig_perf.add_trace(go.Scatter(x=time_data, y=performance_without_cooling, mode='lines+markers', name='Desempenho Sem Arrefecimento',
-                                   line=dict(color='red', width=2), fill='tozeroy'))
-    fig_perf.add_trace(go.Scatter(x=time_data, y=performance_with_cooling, mode='lines+markers', name='Desempenho Com Arrefecimento',
-                                   line=dict(color='cyan', width=2), fill='tozeroy'))
+    fig_perf.add_trace(go.Scatter(x=time_data, y=performance_without_cooling, mode='lines', name='Desempenho Sem Arrefecimento', line=dict(color='red')))
+    fig_perf.add_trace(go.Scatter(x=time_data, y=performance_with_cooling, mode='lines', name='Desempenho Com Arrefecimento', line=dict(color='cyan')))
     fig_perf.update_layout(
-        title=f'Análise de Desempenho - {circuit}',
+        title='Desempenho do Motor',
         xaxis_title='Tempo (minutos)',
         yaxis_title='Desempenho (%)',
         plot_bgcolor='black',
         paper_bgcolor='black',
         font=dict(color='white'),
-        yaxis=dict(range=[0, 100]),
-        xaxis=dict(showgrid=True, gridcolor='gray'),
     )
 
-    # Montar conteúdo do modal
-    modal_content = [
-        dcc.Graph(figure=fig_temp),
-        dcc.Graph(figure=fig_perf),
-        html.Div([
-            html.H4("Análise de Resultados"),
-            html.P("A análise dos dados mostra que:"),
-            html.P(f"- O sistema de arrefecimento teve um desempenho significativo na redução da temperatura média da turbina. "
-                   f"No circuito de {circuit}, a temperatura sem arrefecimento alcançou até {max(temp_without):.1f} °C, "
-                   f"enquanto com o sistema de arrefecimento a temperatura foi reduzida para {max(temp_with):.1f} °C."),
-            html.P("- Essa redução de temperatura é crucial para evitar falhas no motor e melhorar a eficiência."),
-            html.P("- A performance do veículo também se beneficiou, apresentando uma melhora de até {:.1f}% em relação ao desempenho sem o sistema de arrefecimento.".format(
-                max(performance_without_cooling) - max(performance_with_cooling))),
-            html.P(f"- A temperatura média foi mais estável com o sistema de arrefecimento, o que resulta em um melhor controle e segurança durante a corrida."),
-        ])
-    ]
-    return True, modal_content
+    return True, [dcc.Graph(figure=fig_temp), dcc.Graph(figure=fig_perf)]
 
-# Iniciar o servidor
+# Rodar o servidor
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8050)))
