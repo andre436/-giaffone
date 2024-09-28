@@ -1,6 +1,4 @@
-# Turbina
-Documentação do Código de Simulação
- de Arrefecimento da Turbina
+
  2. Introdução
  2.1. Contexto do Problema
  Emummundoonde as corridas de caminhões são decididas por frações de segundo, cada
