@@ -83,7 +83,7 @@ main_layout = dbc.Container([
         dbc.ModalFooter(
             dbc.Button("Fechar", id='close-modal', className='ml-auto')
         ),
-    ], id='modal', size='lg'),
+    ], id='modal', size='lg', is_open=False, style={"transition": "transform 0.3s ease-in-out"})
 ], fluid=True)
 
 # Função de callback para lidar com o login
@@ -97,7 +97,7 @@ main_layout = dbc.Container([
 def login(n_clicks, username, password):
     if n_clicks:
         if username == "scat" and password == "1234":  # Simples validação de login
-            return "", {'display': 'block'}
+            return f"Bem-vindo, {username}!", {'display': 'block'}
         else:
             return "Usuário ou senha inválidos", {'display': 'none'}
     return "", {'display': 'none'}
@@ -145,6 +145,7 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
 # Definir o layout inicial como a página de login
 app.layout = login_layout
 
-# Inicializar o servidor
+# Executar o servidor
 if __name__ == '__main__':
-    app.run_server(debug=True, port=8050)
+    port = int(os.environ.get('PORT', 8050))
+    app.run_server(debug=True, host='0.0.0.0', port=port)
