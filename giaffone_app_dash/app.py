@@ -92,7 +92,8 @@ main_layout = dbc.Container([
     Output('dashboard-container', 'style', allow_duplicate=True),
     Input('login-button', 'n_clicks'),
     State('username', 'value'),
-    State('password', 'value')
+    State('password', 'value'),
+    prevent_initial_call='initial_duplicate'  # Permitir duplicatas nas chamadas iniciais
 )
 def login(n_clicks, username, password):
     if n_clicks:
@@ -117,7 +118,8 @@ def login(n_clicks, username, password):
     Input('btn-curvelo', 'n_clicks'),
     Input('close-modal', 'n_clicks'),
     State('modal', 'is_open'),
-    State('dashboard-container', 'style')
+    State('dashboard-container', 'style'),
+    prevent_initial_call='initial_duplicate'  # Permitir duplicatas nas chamadas iniciais
 )
 def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_interlagos, n_cascavel, n_taruma, n_curvelo, close_n_clicks, is_open, dashboard_style):
     ctx = dash.callback_context
