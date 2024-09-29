@@ -206,31 +206,27 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
     rpm = circuit_rpm_map.get(circuit, 3500)
     send_rpm_to_arduino(circuit, rpm)
 
-    # Atualiza o gráfico com base no circuito selecionado
+    # Simula a corrida com os dados atualizados
     time_data, temp_without, temp_with = simulate_race_with_cooling(circuit)
 
+    # Cria o gráfico comparativo de temperaturas
     fig = go.Figure()
+    fig.add_trace(go.Scatter(x=time_data, y=temp_without, mode='lines', name='Sem arrefecimento', line=dict(color='red')))
+    fig.add_trace(go.Scatter(x=time_data, y=temp_with, mode='lines', name='Com arrefecimento', line=dict(color='blue')))
+    fig.update_layout(title=f'Temperatura com e sem arrefecimento - {circuit}', xaxis_title='Tempo (min)', yaxis_title='Temperatura (°C)', template='plotly_dark')
 
-    fig.add_trace(go.Scatter(x=time_data, y=temp_without, mode='lines', name='Sem Arrefecimento', line=dict(color='firebrick')))
-    fig.add_trace(go.Scatter(x=time_data, y=temp_with, mode='lines', name='Com Arrefecimento', line=dict(color='royalblue')))
-
-    fig.update_layout(title=f'Temperaturas durante a corrida - {circuit}', xaxis_title='Tempo (min)', yaxis_title='Temperatura (°C)', template='plotly_dark')
-
-    # Descrição do gráfico
-    description = f"""
-    Este gráfico mostra a evolução da temperatura ao longo do tempo no circuito {circuit}. 
-    A linha vermelha representa a temperatura sem arrefecimento, enquanto a linha azul mostra 
-    a temperatura com o sistema de arrefecimento ativado.
-    """
-
-    graph_content = html.Div([
+    # Conteúdo do modal
+    modal_content = [
         dcc.Graph(figure=fig),
-        html.P(description)  # Adicionando a descrição abaixo do gráfico
-    ])
+        html.Div(f"O gráfico compara as temperaturas da turbina do caminhão durante a corrida no circuito de {circuit}, com e sem o sistema de arrefecimento em funcionamento.")
+    ]
 
-    return True, graph_content
+    return True, modal_content
 
-# Iniciar o app no servidor
+# Definir o layout inicial como a página de login
+app.layout = login_layout
+
+# Executar o servidor
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 8050))
     app.run_server(debug=True, host='0.0.0.0', port=port)
