@@ -88,8 +88,8 @@ main_layout = dbc.Container([
 
 # Função de callback para lidar com o login
 @app.callback(
-    Output('login-output', 'children'),
-    Output('dashboard-container', 'style'),
+    Output('login-output', 'children', allow_duplicate=True),
+    Output('dashboard-container', 'style', allow_duplicate=True),
     Input('login-button', 'n_clicks'),
     State('username', 'value'),
     State('password', 'value')
@@ -104,9 +104,9 @@ def login(n_clicks, username, password):
 
 # Função para atualizar o gráfico com base no circuito selecionado
 @app.callback(
-    Output('modal', 'is_open'),
-    Output('modal-content', 'children'),
-    Output('dashboard-container', 'style'),
+    Output('modal', 'is_open', allow_duplicate=True),
+    Output('modal-content', 'children', allow_duplicate=True),
+    Output('dashboard-container', 'style', allow_duplicate=True),
     Input('btn-campo-grande', 'n_clicks'),
     Input('btn-goiania', 'n_clicks'),
     Input('btn-londrina', 'n_clicks'),
