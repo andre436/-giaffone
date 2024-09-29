@@ -55,8 +55,17 @@ def send_rpm_to_arduino(circuit, rpm):
 # Iniciar o app Dash
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-# Layout do aplicativo
-app.layout = dbc.Container([
+# Página de login
+login_layout = dbc.Container([
+    dbc.Row(dbc.Col(html.H2("Login - SCAT", className="text-center"), width=12)),
+    dbc.Row(dbc.Col(dbc.Input(id="username", placeholder="Usuário", type="text"), width=12)),
+    dbc.Row(dbc.Col(dbc.Input(id="password", placeholder="Senha", type="password"), width=12)),
+    dbc.Row(dbc.Col(dbc.Button("Acessar", id="login-button", color="primary", className="mt-3"), width=12)),
+    dbc.Row(dbc.Col(html.Div(id="login-output", className="mt-2 text-danger"), width=12))
+], className="mt-5")
+
+# Layout principal do aplicativo
+main_layout = dbc.Container([
     dbc.Row(
         dbc.Col(html.Div(id='circuit-selection', children=[
             html.Div([
@@ -136,6 +145,22 @@ app.index_string = '''
 </html>
 '''
 
+# Função de callback para lidar com o login
+@app.callback(
+    Output('login-output', 'children'),
+    Output('dashboard-container', 'style'),
+    Input('login-button', 'n_clicks'),
+    State('username', 'value'),
+    State('password', 'value')
+)
+def login(n_clicks, username, password):
+    if n_clicks:
+        if username == "scat" and password == "1234":  # Simples validação de login
+            return "", {'display': 'block'}
+        else:
+            return "Usuário ou senha inválidos", {'display': 'none'}
+    return "", {'display': 'none'}
+
 # Função para atualizar o gráfico com base no circuito selecionado
 @app.callback(
     Output('modal', 'is_open'),
@@ -152,7 +177,6 @@ app.index_string = '''
     State('modal', 'is_open')
 )
 def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_interlagos, n_cascavel, n_taruma, n_curvelo, close_n_clicks, is_open):
-    # Define o circuito selecionado com base no botão clicado
     ctx = dash.callback_context
     if not ctx.triggered:
         return is_open, dash.no_update
@@ -175,45 +199,33 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
         'Tarumã': 3200,
         'Curvelo': 3400,
     }
-    rpm = circuit_rpm_map.get(circuit, 3000)
+    rpm = circuit_rpm_map.get(circuit, 3500)
     send_rpm_to_arduino(circuit, rpm)
 
-    # Simular novos dados de temperatura com base no circuito selecionado
+    # Atualiza o gráfico com base no circuito selecionado
     time_data, temp_without, temp_with = simulate_race_with_cooling(circuit)
 
-    # Gráficos
-    fig_temp = go.Figure()
-    fig_temp.add_trace(go.Scatter(x=time_data, y=temp_without, mode='lines+markers', name='Sem Arrefecimento', 
-                                  line=dict(color='red', width=2), fill='tozeroy'))
-    fig_temp.add_trace(go.Scatter(x=time_data, y=temp_with, mode='lines+markers', name='Com Arrefecimento', 
-                                  line=dict(color='cyan', width=2), fill='tozeroy'))
-    fig_temp.update_layout(
-        title=f'Análise da Temperatura da Turbina - {circuit}',
-        xaxis_title='Tempo (minutos)',
-        yaxis_title='Temperatura (°C)',
-        plot_bgcolor='black',
-        paper_bgcolor='black',
-        font=dict(color='white'),
-        yaxis=dict(range=[0, 100]),
-        xaxis=dict(showgrid=True, gridcolor='gray'),
-    )
+    fig = go.Figure()
 
-    performance_without_cooling = 100 - (temp_without - 70) * 0.5
-    performance_with_cooling = 100 - (temp_with - 70) * 0.5
-    fig_perf = go.Figure()
-    fig_perf.add_trace(go.Scatter(x=time_data, y=performance_without_cooling, mode='lines', name='Desempenho Sem Arrefecimento', line=dict(color='red')))
-    fig_perf.add_trace(go.Scatter(x=time_data, y=performance_with_cooling, mode='lines', name='Desempenho Com Arrefecimento', line=dict(color='cyan')))
-    fig_perf.update_layout(
-        title='Desempenho do Motor',
-        xaxis_title='Tempo (minutos)',
-        yaxis_title='Desempenho (%)',
-        plot_bgcolor='black',
-        paper_bgcolor='black',
-        font=dict(color='white'),
-    )
+    fig.add_trace(go.Scatter(x=time_data, y=temp_without, mode='lines', name='Sem Arrefecimento', line=dict(color='firebrick')))
+    fig.add_trace(go.Scatter(x=time_data, y=temp_with, mode='lines', name='Com Arrefecimento', line=dict(color='royalblue')))
 
-    return True, [dcc.Graph(figure=fig_temp), dcc.Graph(figure=fig_perf)]
+    fig.update_layout(title=f'Temperaturas durante a corrida - {circuit}', xaxis_title='Tempo (min)', yaxis_title='Temperatura (°C)', template='plotly_dark')
 
-# Rodar o servidor
+    # Descrição do gráfico
+    description = f"""
+    Este gráfico mostra a evolução da temperatura ao longo do tempo no circuito {circuit}. 
+    A linha vermelha representa a temperatura sem arrefecimento, enquanto a linha azul mostra 
+    a temperatura com o sistema de arrefecimento ativado.
+    """
+
+    graph_content = html.Div([
+        dcc.Graph(figure=fig),
+        html.P(description)  # Adicionando a descrição abaixo do gráfico
+    ])
+
+    return True, graph_content
+
+# Iniciar o app
 if __name__ == '__main__':
-    app.run_server(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8050)))
+    app.run_server(debug=True)
