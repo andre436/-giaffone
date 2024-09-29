@@ -8,7 +8,7 @@ import threading
 import time
 
 # Configurações do aplicativo Dash
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
 
 # Função para simular a corrida com e sem arrefecimento
 def simulate_race_with_cooling(circuit):
