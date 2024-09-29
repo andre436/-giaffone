@@ -6,6 +6,10 @@ import plotly.graph_objects as go
 import numpy as np
 import threading
 import time
+from flask import Flask
+
+# Criação do servidor Flask
+server = Flask(__name__)
 
 # Função para simular a corrida com e sem arrefecimento
 def simulate_race_with_cooling(circuit):
@@ -53,7 +57,7 @@ def send_rpm_to_arduino(circuit, rpm):
     thread.start()
 
 # Iniciar o app Dash
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = dash.Dash(__name__, server=server, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 # Página de login
 login_layout = dbc.Container([
@@ -226,6 +230,7 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
 
     return True, graph_content
 
-# Iniciar o app
+# Iniciar o app no servidor
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run_server(debug=True, host='0.0.0.0', port=port)
