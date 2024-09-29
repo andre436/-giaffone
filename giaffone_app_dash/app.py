@@ -53,7 +53,10 @@ login_layout = dbc.Container([
     dbc.Row(dbc.Col(dbc.Input(id="username", placeholder="Usuário", type="text"), width=12)),
     dbc.Row(dbc.Col(dbc.Input(id="password", placeholder="Senha", type="password"), width=12)),
     dbc.Row(dbc.Col(dbc.Button("Acessar", id="login-button", color="primary", className="mt-3"), width=12)),
-    dbc.Row(dbc.Col(html.Div(id="login-output", className="mt-2 text-danger"), width=12))
+    dbc.Row(dbc.Col(html.Div(id="login-output", className="mt-2 text-danger"), width=12)),
+    
+    # Adiciona dashboard-container ao layout inicial, mas oculto
+    dbc.Row(dbc.Col(html.Div(id='dashboard-container', style={'display': 'none'}), width=12))
 ], className="mt-5")
 
 # Layout principal do aplicativo
@@ -72,7 +75,6 @@ main_layout = dbc.Container([
             ], className='button-grid'),
         ]), width=12)
     ),
-    dbc.Row([html.Div(id='dashboard-container', style={'display': 'none'})]),  # Oculto até que um circuito seja selecionado
 
     # Modal para exibir os gráficos
     dbc.Modal([
@@ -83,7 +85,7 @@ main_layout = dbc.Container([
         dbc.ModalFooter(
             dbc.Button("Fechar", id='close-modal', className='ml-auto')
         ),
-    ], id='modal', size='lg', is_open=False, style={"transition": "transform 0.3s ease-in-out"})
+    ], id='modal', size='lg', is_open=False)
 ], fluid=True)
 
 # Função de callback para lidar com o login
