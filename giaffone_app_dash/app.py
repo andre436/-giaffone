@@ -6,8 +6,6 @@ import plotly.graph_objects as go
 import numpy as np
 import threading
 import time
-import smtplib
-from email.mime.text import MIMEText
 
 # Função para simular a corrida com e sem arrefecimento
 def simulate_race_with_cooling(circuit):
@@ -53,18 +51,6 @@ def send_rpm_to_arduino(circuit, rpm):
 
     thread = threading.Thread(target=motor_simulation)
     thread.start()
-
-# Função para enviar email
-def send_email(circuit, rpm):
-    msg = MIMEText(f'Circuito: {circuit}\nRPM: {rpm}')
-    msg['Subject'] = f'Dados do Circuito: {circuit}'
-    msg['From'] = 'seu_email@gmail.com'
-    msg['To'] = 'andrerdeus087@gmail.com'
-
-    with smtplib.SMTP('smtp.gmail.com', 587) as server:
-        server.starttls()
-        server.login('sistemaecontrolearrefecimento@gmail.com', 'ard128s92')
-        server.send_message(msg)
 
 # Iniciar o app Dash
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -192,9 +178,6 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
     rpm = circuit_rpm_map.get(circuit, 3000)
     send_rpm_to_arduino(circuit, rpm)
 
-    # Envia os dados por email
-    send_email(circuit, rpm)
-
     # Simular novos dados de temperatura com base no circuito selecionado
     time_data, temp_without, temp_with = simulate_race_with_cooling(circuit)
 
@@ -229,11 +212,7 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
         font=dict(color='white'),
     )
 
-    # Adicionando explicações
-    explanation_temp = f'O gráfico mostra a temperatura da turbina durante a corrida no circuito {circuit}, comparando os efeitos do arrefecimento e sem arrefecimento.'
-    explanation_perf = 'Este gráfico representa o desempenho do motor em relação ao tempo, considerando a temperatura da turbina.'
-
-    return True, [dcc.Markdown(explanation_temp), dcc.Graph(figure=fig_temp), dcc.Markdown(explanation_perf), dcc.Graph(figure=fig_perf)]
+    return True, [dcc.Graph(figure=fig_temp), dcc.Graph(figure=fig_perf)]
 
 # Rodar o servidor
 if __name__ == '__main__':
