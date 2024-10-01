@@ -1,11 +1,12 @@
 import os
 import dash
-from dash import dcc, html, Input, Output, State
+from dash import dcc, html, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 import numpy as np
 import threading
 import time
+from io import BytesIO
 
 # Função para simular a corrida com e sem arrefecimento
 def simulate_race_with_cooling(circuit):
@@ -35,35 +36,20 @@ def simulate_race_with_cooling(circuit):
 
 # Função para gerar o conteúdo do arquivo TXT
 def generate_txt_content(circuit, rpm):
-    return f"Circuito: {circuit}\nRPM: {rpm}\nLED 1: ON\nVentoinha 1: ON\nVentoinha 2: ON\nDuração: 3 minutos\n"
-
-# Função para enviar dados de RPM para o Arduino via arquivo TXT
-def send_rpm_to_arduino(circuit, rpm):
-    filepath = r'circuito_rpm.txt'  # Mude o caminho para o arquivo TXT
-    with open(filepath, 'w') as file:
-        file.write(generate_txt_content(circuit, rpm))
-
-    # Simula motor funcionando por 3 minutos em uma thread separada
-    def motor_simulation():
-        print(f"LED 1 ON, Ventoinha 1 ON, Ventoinha 2 ON por 3 minutos no circuito {circuit}")
-        time.sleep(180)  # Simula 3 minutos de funcionamento
-        print(f"LED 1 OFF, Ventoinha 1 OFF, Ventoinha 2 OFF no circuito {circuit}")
-
-    thread = threading.Thread(target=motor_simulation)
-    thread.start()
-
-# Função para gerar o link de download do arquivo TXT
-def download_txt_link(circuit, rpm):
-    content = generate_txt_content(circuit, rpm)
-    return f"data:text/plain;charset=utf-8,{content}"
+    content = f"Circuito: {circuit}\n"
+    content += f"RPM: {rpm}\n"
+    content += "Ações:\n"
+    content += "- Acender LED 1\n"
+    content += "- Após, acender LED 2 e apagar LED 1\n"
+    content += "- Ligar Ventoinha 1 e Ventoinha 2\n"
+    content += "Duração das ações: 3 minutos\n"
+    return content
 
 # Iniciar o app Dash
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 # Layout do aplicativo
 app.layout = dbc.Container([
-
-    # Botões de seleção de circuitos
     dbc.Row(
         dbc.Col(html.Div(id='circuit-selection', children=[
             html.Div([
@@ -78,9 +64,10 @@ app.layout = dbc.Container([
             ], className='button-grid'),
         ]), width=12)
     ),
-    
+    dbc.Row([html.Div(id='dashboard-container', style={'display': 'none'})]),  # Oculto até que um circuito seja selecionado
+
     # Modal para exibir os gráficos
-    dbc.Modal([ 
+    dbc.Modal([
         dbc.ModalHeader("Gráficos da Corrida"),
         dbc.ModalBody(
             dbc.Container(id='modal-content', fluid=True)
@@ -89,41 +76,97 @@ app.layout = dbc.Container([
             dbc.Button("Fechar", id='close-modal', className='ml-auto')
         ),
     ], id='modal', size='lg'),
-    
-    # Link para download do arquivo TXT
-    html.A("Download Arquivo TXT", id='download-link', download="circuito_rpm.txt", href="", target="_blank"),
-    
+
+    # Componente para download do arquivo TXT
+    dcc.Download(id='download-txt'),
+
 ], fluid=True, style={'height': '100vh', 'width': '100vw', 'padding': '0', 'margin': '0', 'backgroundColor': 'black'})
 
-# Callback para mostrar gráficos e gerar arquivo TXT
+# Estilos adicionais via CSS
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <style>
+            body { 
+                margin: 0; 
+                background-image: url('C:/Users/User/Desktop/python-getting-started/IMG/IMAGEM DE FUNDO.jpg'); 
+                background-size: cover; 
+                background-position: center; 
+            }
+            .button-grid {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+            }
+            .circuit-btn {
+                background-color: transparent;
+                color: white;
+                border: none;
+                font-size: 3rem;
+                font-weight: bold;
+                text-transform: uppercase;
+                margin: 10px;
+                transition: all 0.3s ease;
+                cursor: pointer;
+            }
+            .circuit-btn:hover {
+                letter-spacing: 2px;
+                color: cyan;
+            }
+        </style>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+'''
+
+# Função para atualizar o gráfico e gerar o arquivo TXT com base no circuito selecionado
 @app.callback(
     Output('modal', 'is_open'),
     Output('modal-content', 'children'),
-    Output('download-link', 'href'),
-    Input('btn-campo-grande', 'n_clicks'),
-    Input('btn-goiania', 'n_clicks'),
-    Input('btn-londrina', 'n_clicks'),
-    Input('btn-santa-cruz', 'n_clicks'),
-    Input('btn-interlagos', 'n_clicks'),
-    Input('btn-cascavel', 'n_clicks'),
-    Input('btn-taruma', 'n_clicks'),
-    Input('btn-curvelo', 'n_clicks'),
-    Input('close-modal', 'n_clicks'),
-    State('modal', 'is_open')
+    Output('download-txt', 'data'),
+    [Input('btn-campo-grande', 'n_clicks'),
+     Input('btn-goiania', 'n_clicks'),
+     Input('btn-londrina', 'n_clicks'),
+     Input('btn-santa-cruz', 'n_clicks'),
+     Input('btn-interlagos', 'n_clicks'),
+     Input('btn-cascavel', 'n_clicks'),
+     Input('btn-taruma', 'n_clicks'),
+     Input('btn-curvelo', 'n_clicks'),
+     Input('close-modal', 'n_clicks')],
+    [State('modal', 'is_open')]
 )
 def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_interlagos, n_cascavel, n_taruma, n_curvelo, close_n_clicks, is_open):
-    # Define o circuito selecionado com base no botão clicado
-    ctx = dash.callback_context
+    ctx = callback_context
     if not ctx.triggered:
         return is_open, dash.no_update, dash.no_update
-    
-    if ctx.triggered[0]['prop_id'].split('.')[0] == 'close-modal':
+
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+    if triggered_id == 'close-modal':
         return False, dash.no_update, dash.no_update
 
-    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    circuit = button_id.replace('btn-', '').replace('-', ' ').capitalize()
+    # Get the circuit name
+    circuit = triggered_id.replace('btn-', '').replace('-', ' ').title()
+    if circuit == 'Goiania':
+        circuit = 'Goiânia'
+    elif circuit == 'Taruma':
+        circuit = 'Tarumã'
 
-    # Envia o RPM para o Arduino e ativa os componentes (LED e ventoinhas)
+    # Map RPM based on circuit
     circuit_rpm_map = {
         'Campo Grande': 3500,
         'Goiânia': 3700,
@@ -135,7 +178,22 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
         'Curvelo': 3400,
     }
     rpm = circuit_rpm_map.get(circuit, 3000)
-    send_rpm_to_arduino(circuit, rpm)
+
+    # Generate TXT content
+    txt_content = generate_txt_content(circuit, rpm)
+
+    # Simular as ações em uma thread separada
+    def simulate_actions():
+        print(f"Acendendo LED 1")
+        time.sleep(1)
+        print(f"Acendendo LED 2 e apagando LED 1")
+        time.sleep(1)
+        print(f"Ligando Ventoinha 1 e Ventoinha 2")
+        time.sleep(180)  # 3 minutos
+        print(f"Desligando Ventoinha 1 e Ventoinha 2")
+        print(f"Desligando LED 2")
+
+    threading.Thread(target=simulate_actions).start()
 
     # Simular novos dados de temperatura com base no circuito selecionado
     time_data, temp_without, temp_with = simulate_race_with_cooling(circuit)
@@ -163,20 +221,18 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
     fig_perf.add_trace(go.Scatter(x=time_data, y=performance_without_cooling, mode='lines', name='Desempenho Sem Arrefecimento', line=dict(color='red')))
     fig_perf.add_trace(go.Scatter(x=time_data, y=performance_with_cooling, mode='lines', name='Desempenho Com Arrefecimento', line=dict(color='cyan')))
     fig_perf.update_layout(
-        title=f'Análise de Desempenho - {circuit}',
+        title='Desempenho do Motor',
         xaxis_title='Tempo (minutos)',
         yaxis_title='Desempenho (%)',
         plot_bgcolor='black',
         paper_bgcolor='black',
         font=dict(color='white'),
-        yaxis=dict(range=[0, 100]),
-        xaxis=dict(showgrid=True, gridcolor='gray'),
     )
 
-    return True, dbc.Container([
-        dcc.Graph(figure=fig_temp),
-        dcc.Graph(figure=fig_perf)
-    ], fluid=True), download_txt_link(circuit, rpm)
+    # Preparar o arquivo para download
+    return True, [dcc.Graph(figure=fig_temp), dcc.Graph(figure=fig_perf)], dcc.send_bytes(
+        lambda buffer: buffer.write(txt_content.encode()), filename=f"{circuit}.txt"
+    )
 
 # Rodar o servidor
 if __name__ == '__main__':
