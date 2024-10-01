@@ -6,6 +6,8 @@ import plotly.graph_objects as go
 import numpy as np
 import threading
 import time
+import os
+
 
 # Função para simular a corrida com e sem arrefecimento
 def simulate_race_with_cooling(circuit):
