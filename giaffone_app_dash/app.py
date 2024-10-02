@@ -222,6 +222,7 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
 
     return True, modal_content, txt_content
 
+
 # Rodar o servidor
 if __name__ == '__main__':
     app.run_server(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8050)))
