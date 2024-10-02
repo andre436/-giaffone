@@ -159,14 +159,22 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
     if triggered_id == 'close-modal':
         return False, dash.no_update, dash.no_update
 
-    # Get the circuit name
-    circuit = triggered_id.replace('btn-', '').replace('-', ' ').title()
-    if circuit == 'Goiania':
-        circuit = 'Goiânia'
-    elif circuit == 'Taruma':
-        circuit = 'Tarumã'
+    # Mapeamento dos circuitos
+    circuit_map = {
+        'btn-campo-grande': 'Campo Grande',
+        'btn-goiania': 'Goiânia',
+        'btn-londrina': 'Londrina',
+        'btn-santa-cruz': 'Santa Cruz',
+        'btn-interlagos': 'Interlagos',
+        'btn-cascavel': 'Cascavel',
+        'btn-taruma': 'Tarumã',
+        'btn-curvelo': 'Curvelo',
+    }
 
-    # Map RPM based on circuit
+    # Obtendo o nome do circuito
+    circuit = circuit_map.get(triggered_id, 'Desconhecido')
+
+    # Mapeamento de RPM baseado no circuito
     circuit_rpm_map = {
         'Campo Grande': 3500,
         'Goiânia': 3700,
@@ -179,10 +187,10 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
     }
     rpm = circuit_rpm_map.get(circuit, 3000)
 
-    # Generate TXT content
+    # Gerar conteúdo TXT
     txt_content = generate_txt_content(circuit, rpm)
 
-    # Simular as ações em uma thread separada
+    # Simular ações em uma thread separada
     def simulate_actions():
         print(f"Acendendo LED 1")
         time.sleep(1)
@@ -195,33 +203,27 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
     # Enviar dados para o ESP
     try:
         requests.post("http://192.168.1.9:80", data={'circuit': circuit, 'rpm': rpm})
+        print(f'Dados enviados para o ESP: Circuito={circuit}, RPM={rpm}')
     except Exception as e:
         print(f'Erro ao enviar dados para o ESP: {e}')
 
-    # Iniciar a simulação em uma thread separada
+    # Iniciar simulação em uma thread separada
     threading.Thread(target=simulate_actions).start()
 
     # Gerar os gráficos
     time_data, temp_without_cooling, temp_with_cooling = simulate_race_with_cooling(circuit)
+    figure = go.Figure()
+    figure.add_trace(go.Scatter(x=time_data, y=temp_without_cooling, mode='lines', name='Sem Arrefecimento', line=dict(color='red')))
+    figure.add_trace(go.Scatter(x=time_data, y=temp_with_cooling, mode='lines', name='Com Arrefecimento', line=dict(color='blue')))
+    figure.update_layout(title=f'Temperaturas em {circuit}', xaxis_title='Tempo (min)', yaxis_title='Temperatura (°C)')
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=time_data, y=temp_without_cooling, mode='lines', name='Sem Arrefecimento'))
-    fig.add_trace(go.Scatter(x=time_data, y=temp_with_cooling, mode='lines', name='Com Arrefecimento'))
-    fig.update_layout(title=f'Temperatura no Circuito {circuit}',
-                      xaxis_title='Tempo (min)',
-                      yaxis_title='Temperatura (°C)',
-                      template='plotly_dark')
-
-    # Criar o conteúdo do modal
+    # Preparar conteúdo do modal
     modal_content = [
-        dcc.Graph(figure=fig),
-        html.Hr(),
-        html.Div(f'Os dados foram enviados para o ESP e um arquivo TXT será gerado.'),
-        dcc.Download(id='download-txt', data={'content': txt_content, 'filename': f'dados_{circuit}.txt'})
+        dcc.Graph(figure=figure),
+        dcc.Markdown(txt_content),
     ]
 
-    return True, modal_content, txt_content
-
+    return True, modal_content, dcc.send_data_frame(txt_content, 'circuito.txt')
 
 # Rodar o servidor
 if __name__ == '__main__':
