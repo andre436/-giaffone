@@ -6,12 +6,12 @@ import plotly.graph_objects as go
 import numpy as np
 import threading
 import time
-from io import BytesIO
+import requests  # Adicione esta importação
 
 # Função para simular a corrida com e sem arrefecimento
 def simulate_race_with_cooling(circuit):
     time_data = np.linspace(0, 90, 180)  # Tempo em minutos (1h30)
-    
+
     # Definindo temperaturas baseadas em cada circuito
     circuit_temp_map = {
         'Campo Grande': 28,
@@ -191,48 +191,36 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
         print(f"Ligando Ventoinha 1 e Ventoinha 2")
         time.sleep(180)  # 3 minutos
         print(f"Desligando Ventoinha 1 e Ventoinha 2")
-        print(f"Desligando LED 2")
 
+    # Enviar dados para o ESP
+    try:
+        requests.post("http://192.168.1.9:80", data={'circuit': circuit, 'rpm': rpm})
+    except Exception as e:
+        print(f'Erro ao enviar dados para o ESP: {e}')
+
+    # Iniciar a simulação em uma thread separada
     threading.Thread(target=simulate_actions).start()
 
-    # Simular novos dados de temperatura com base no circuito selecionado
-    time_data, temp_without, temp_with = simulate_race_with_cooling(circuit)
+    # Gerar os gráficos
+    time_data, temp_without_cooling, temp_with_cooling = simulate_race_with_cooling(circuit)
 
-    # Gráficos
-    fig_temp = go.Figure()
-    fig_temp.add_trace(go.Scatter(x=time_data, y=temp_without, mode='lines+markers', name='Sem Arrefecimento', 
-                                  line=dict(color='red', width=2), fill='tozeroy'))
-    fig_temp.add_trace(go.Scatter(x=time_data, y=temp_with, mode='lines+markers', name='Com Arrefecimento', 
-                                  line=dict(color='cyan', width=2), fill='tozeroy'))
-    fig_temp.update_layout(
-        title=f'Análise da Temperatura da Turbina - {circuit}',
-        xaxis_title='Tempo (minutos)',
-        yaxis_title='Temperatura (°C)',
-        plot_bgcolor='black',
-        paper_bgcolor='black',
-        font=dict(color='white'),
-        yaxis=dict(range=[0, 100]),
-        xaxis=dict(showgrid=True, gridcolor='gray'),
-    )
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=time_data, y=temp_without_cooling, mode='lines', name='Sem Arrefecimento'))
+    fig.add_trace(go.Scatter(x=time_data, y=temp_with_cooling, mode='lines', name='Com Arrefecimento'))
+    fig.update_layout(title=f'Temperatura no Circuito {circuit}',
+                      xaxis_title='Tempo (min)',
+                      yaxis_title='Temperatura (°C)',
+                      template='plotly_dark')
 
-    performance_without_cooling = 100 - (temp_without - 70) * 0.5
-    performance_with_cooling = 100 - (temp_with - 70) * 0.5
-    fig_perf = go.Figure()
-    fig_perf.add_trace(go.Scatter(x=time_data, y=performance_without_cooling, mode='lines', name='Desempenho Sem Arrefecimento', line=dict(color='red')))
-    fig_perf.add_trace(go.Scatter(x=time_data, y=performance_with_cooling, mode='lines', name='Desempenho Com Arrefecimento', line=dict(color='cyan')))
-    fig_perf.update_layout(
-        title='Desempenho do Motor',
-        xaxis_title='Tempo (minutos)',
-        yaxis_title='Desempenho (%)',
-        plot_bgcolor='black',
-        paper_bgcolor='black',
-        font=dict(color='white'),
-    )
+    # Criar o conteúdo do modal
+    modal_content = [
+        dcc.Graph(figure=fig),
+        html.Hr(),
+        html.Div(f'Os dados foram enviados para o ESP e um arquivo TXT será gerado.'),
+        dcc.Download(id='download-txt', data={'content': txt_content, 'filename': f'dados_{circuit}.txt'})
+    ]
 
-    # Preparar o arquivo para download
-    return True, [dcc.Graph(figure=fig_temp), dcc.Graph(figure=fig_perf)], dcc.send_bytes(
-        lambda buffer: buffer.write(txt_content.encode()), filename=f"{circuit}.txt"
-    )
+    return True, modal_content, txt_content
 
 # Rodar o servidor
 if __name__ == '__main__':
