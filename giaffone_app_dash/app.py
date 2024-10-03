@@ -8,6 +8,80 @@ import threading
 import time
 import requests  # Para enviar os dados ao ESP
 
+# Código C++ do ESP32
+esp32_code = '''
+// Definir as portas do ESP32
+const int motorPin = 5;  // Pino do motor
+const int redSignalPin = 12;  // Pino do sinal vermelho
+const int greenSignalPin = 14;  // Pino do sinal verde
+const int fan1Pin = 16;  // Pino da ventoinha 1
+const int fan2Pin = 17;  // Pino da ventoinha 2
+const int pumpPin = 18;  // Pino da bomba
+
+// Função para configurar os pinos
+void setup() {
+  // Configurar os pinos como saídas
+  pinMode(motorPin, OUTPUT);
+  pinMode(redSignalPin, OUTPUT);
+  pinMode(greenSignalPin, OUTPUT);
+  pinMode(fan1Pin, OUTPUT);
+  pinMode(fan2Pin, OUTPUT);
+  pinMode(pumpPin, OUTPUT);
+
+  // Inicialmente, tudo desligado
+  digitalWrite(motorPin, LOW);
+  digitalWrite(redSignalPin, LOW);
+  digitalWrite(greenSignalPin, LOW);
+  digitalWrite(fan1Pin, LOW);
+  digitalWrite(fan2Pin, LOW);
+  digitalWrite(pumpPin, LOW);
+}
+
+void loop() {
+  // 1. Ativar motor entre 4 e 4,8 RPM
+  analogWrite(motorPin, 64);  // Ajustar PWM para 4/4.8 RPM
+
+  // 2. Acender o sinal vermelho
+  digitalWrite(redSignalPin, HIGH);
+  delay(2000);  // Aguardar 2 segundos
+  
+  // 3. Apagar sinal vermelho e acender sinal verde
+  digitalWrite(redSignalPin, LOW);
+  digitalWrite(greenSignalPin, HIGH);
+  delay(2000);  // Aguardar 2 segundos
+
+  // 4. Ligar o motor do micro-ondas, ventoinhas e bomba por 3 minutos (180000 ms)
+  digitalWrite(fan1Pin, HIGH);
+  digitalWrite(fan2Pin, HIGH);
+  digitalWrite(pumpPin, HIGH);
+  
+  delay(180000);  // Executa por 3 minutos
+
+  // 5. Desligar motor, ventoinhas e bomba
+  digitalWrite(motorPin, LOW);
+  digitalWrite(fan1Pin, LOW);
+  digitalWrite(fan2Pin, LOW);
+  digitalWrite(pumpPin, LOW);
+
+  // 6. Apagar o sinal verde
+  digitalWrite(greenSignalPin, LOW);
+
+  // Aguardar para o próximo ciclo
+  delay(10000);  // Espera 10 segundos antes de reiniciar o ciclo
+}
+'''
+
+# Função para gerar o conteúdo do arquivo TXT
+def generate_txt_content(circuit, rpm):
+    content = f"Circuito: {circuit}\n"
+    content += f"RPM: {rpm}\n"
+    content += "Ações:\n"
+    content += "- Acender LED 1\n"
+    content += "- Após, acender LED 2 e apagar LED 1\n"
+    content += "- Ligar Ventoinha 1 e Ventoinha 2\n"
+    content += "Duração das ações: 3 minutos\n"
+    return content
+
 # Função para simular a corrida com e sem arrefecimento
 def simulate_race_with_cooling(circuit):
     time_data = np.linspace(0, 90, 180)  # Tempo em minutos (1h30)
@@ -33,17 +107,6 @@ def simulate_race_with_cooling(circuit):
     temperature_with_cooling = temperature_without_cooling - 10 * np.sin(2 * np.pi * time_data / 20) - np.random.normal(0, 2, len(time_data))
 
     return time_data, temperature_without_cooling, temperature_with_cooling
-
-# Função para gerar o conteúdo do arquivo TXT
-def generate_txt_content(circuit, rpm):
-    content = f"Circuito: {circuit}\n"
-    content += f"RPM: {rpm}\n"
-    content += "Ações:\n"
-    content += "- Acender LED 1\n"
-    content += "- Após, acender LED 2 e apagar LED 1\n"
-    content += "- Ligar Ventoinha 1 e Ventoinha 2\n"
-    content += "Duração das ações: 3 minutos\n"
-    return content
 
 # Iniciar o app Dash
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -149,71 +212,48 @@ app.index_string = '''
      Input('close-modal', 'n_clicks')],
     [State('modal', 'is_open')]
 )
-def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_interlagos, n_cascavel, n_taruma, n_curvelo, close_n_clicks, is_open):
-    ctx = callback_context
-    if not ctx.triggered:
-        return is_open, dash.no_update, dash.no_update
+def update_simulation(btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, close_click, is_open):
+    # Identificar qual botão foi clicado
+    clicked_button = callback_context.triggered[0]['prop_id'].split('.')[0]
+    
+    if clicked_button == 'close-modal':
+        return False, None, None
 
-    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
-
-    if triggered_id == 'close-modal':
-        return False, dash.no_update, dash.no_update
-
-    # Pegar o nome do circuito
-    circuit = triggered_id.replace('btn-', '').replace('-', ' ').title()
-    if circuit == 'Goiania':
-        circuit = 'Goiânia'
-    elif circuit == 'Taruma':
-        circuit = 'Tarumã'
-
-    # Mapeamento de RPM baseado no circuito
-    circuit_rpm_map = {
-        'Campo Grande': 3500,
-        'Goiânia': 3700,
-        'Londrina': 3400,
-        'Santa Cruz': 3600,
-        'Interlagos': 3800,
-        'Cascavel': 3300,
-        'Tarumã': 3200,
-        'Curvelo': 3400,
+    # Mapear o botão clicado para o circuito correspondente
+    circuit_map = {
+        'btn-campo-grande': 'Campo Grande',
+        'btn-goiania': 'Goiânia',
+        'btn-londrina': 'Londrina',
+        'btn-santa-cruz': 'Santa Cruz',
+        'btn-interlagos': 'Interlagos',
+        'btn-cascavel': 'Cascavel',
+        'btn-taruma': 'Tarumã',
+        'btn-curvelo': 'Curvelo'
     }
-    rpm = circuit_rpm_map.get(circuit, 3000)
 
-    # Gerar conteúdo do TXT
-    txt_content = generate_txt_content(circuit, rpm)
+    circuit = circuit_map.get(clicked_button, 'N/A')
+    
+    # Simular a corrida
+    time_data, temp_no_cooling, temp_with_cooling = simulate_race_with_cooling(circuit)
 
-    # Simular as ações em uma thread separada
-    def simulate_actions():
-        print(f"Acendendo LED 1")
-        time.sleep(1)
-        print(f"Acendendo LED 2 e apagando LED 1")
-        time.sleep(1)
-        print(f"Ligando Ventoinha 1 e Ventoinha 2")
-        time.sleep(180)  # 3 minutos
-        print(f"Desligando Ventoinha 1 e Ventoinha 2")
-
-    # Enviar dados para o ESP
+    # Enviar o código para o ESP32
     try:
-        requests.post("http://192.168.1.9:80", data={'circuit': circuit, 'rpm': rpm})
-    except Exception as e:
-        print(f'Erro ao enviar dados para o ESP: {e}')
+        url = 'http://192.168.1.9/send_code'  # Endereço IP do ESP
+        payload = {'code': esp32_code}
+        requests.post(url, data=payload)
+    except:
+        print(f"Falha ao enviar código para o ESP32 no circuito {circuit}")
 
-    # Iniciar a simulação em uma thread separada
-    threading.Thread(target=simulate_actions).start()
+    # Gerar conteúdo do arquivo TXT
+    txt_content = generate_txt_content(circuit, 4.5)
 
-    # Gerar os gráficos
-    time_data, temp_without_cooling, temp_with_cooling = simulate_race_with_cooling(circuit)
-
+    # Plotar o gráfico
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=time_data, y=temp_without_cooling, mode='lines', name='Sem Arrefecimento'))
-    fig.add_trace(go.Scatter(x=time_data, y=temp_with_cooling, mode='lines', name='Com Arrefecimento'))
-    fig.update_layout(title=f"Temperatura no Circuito {circuit}", xaxis_title='Tempo (min)', yaxis_title='Temperatura (°C)', template='plotly_dark')
+    fig.add_trace(go.Scatter(x=time_data, y=temp_no_cooling, mode='lines', name='Sem Arrefecimento', line=dict(color='firebrick')))
+    fig.add_trace(go.Scatter(x=time_data, y=temp_with_cooling, mode='lines', name='Com Arrefecimento', line=dict(color='royalblue')))
+    fig.update_layout(title=f"Simulação de Temperatura - {circuit}", xaxis_title='Tempo (min)', yaxis_title='Temperatura (°C)', template='plotly_dark')
 
-    graph = dcc.Graph(figure=fig)
-
-    # Abrir o modal com o gráfico e gerar o arquivo TXT
-    return True, graph, dict(content=txt_content, filename=f'{circuit}_dados.txt')
-
+    return True, dcc.Graph(figure=fig), dict(content=txt_content, filename=f'{circuit}.txt')
 # Rodar o servidor
 if __name__ == '__main__':
     app.run_server(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8050)))
