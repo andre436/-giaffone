@@ -31,7 +31,7 @@ app.layout = html.Div([
         ),
         
         # Botão para gerar gráficos
-        dbc.Button('Gerar Gráficos', id='generate-graphs-btn', color='primary', block=True),
+        dbc.Button('Gerar Gráficos', id='generate-graphs-btn', color='primary'),
         
         # Modal para exibir os gráficos
         dbc.Modal(
@@ -99,7 +99,7 @@ def generate_graphs(n_clicks, circuit):
     ])
 
     return True, modal_content
-
+  
 # Rodar o servidor
 if __name__ == '__main__':
     app.run_server(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8050)))
