@@ -99,9 +99,10 @@ app.index_string = '''
         <style>
             body { 
                 margin: 0; 
-                background-image: url('C:/Users/User/Desktop/python-getting-started/IMG/IMAGEM DE FUNDO.jpg'); 
+                background-image: url('/assets/imagem_de_fundo.jpg');  /* Altere para o caminho correto */
                 background-size: cover; 
                 background-position: center; 
+                color: white;  /* Cor do texto em branco */
             }
             .button-grid {
                 display: flex;
@@ -124,6 +125,11 @@ app.index_string = '''
             .circuit-btn:hover {
                 letter-spacing: 2px;
                 color: cyan;
+            }
+            /* Estilo do modal */
+            .modal-body {
+                background-color: rgba(0, 0, 0, 0.9); /* Fundo escuro e semi-transparente para o modal */
+                color: white; /* Texto branco */
             }
         </style>
     </head>
