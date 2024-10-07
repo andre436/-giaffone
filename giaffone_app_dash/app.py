@@ -1,11 +1,9 @@
-import os
+import os 
 import dash
 from dash import dcc, html, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 import numpy as np
-import threading
-import time
 
 # Função para simular a corrida com e sem arrefecimento
 def simulate_race_with_cooling(circuit):
@@ -35,7 +33,6 @@ def simulate_race_with_cooling(circuit):
 
 # Cálculos de Transferência de Calor
 def calculate_heat_transfer():
-    # Dados do sistema
     T_in = 550  # °C
     T_intercooler_out = 120  # °C
     T_new_system_out = 80  # °C
@@ -76,14 +73,15 @@ app.layout = dbc.Container([
 
     # Modal para exibir os gráficos
     dbc.Modal([
-        dbc.ModalHeader("Gráficos da Corrida"),
+        dbc.ModalHeader("Gráficos da Corrida", style={'backgroundColor': 'black', 'color': 'white'}),
         dbc.ModalBody(
-            dbc.Container(id='modal-content', fluid=True)
+            dbc.Container(id='modal-content', fluid=True),
+            style={'backgroundColor': 'black', 'color': 'white'}  # Fundo e texto do corpo do modal
         ),
         dbc.ModalFooter(
-            dbc.Button("Fechar", id='close-modal', className='ml-auto')
+            dbc.Button("Fechar", id='close-modal', className='ml-auto', style={'backgroundColor': 'black', 'color': 'white'})
         ),
-    ], id='modal', size='lg'),
+    ], id='modal', size='lg', style={'backgroundColor': 'black'}),  # Fundo preto no modal inteiro
 
 ], fluid=True, style={'height': '100vh', 'width': '100vw', 'padding': '0', 'margin': '0', 'backgroundColor': 'black'})
 
@@ -183,8 +181,8 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
         title=f'Análise da Temperatura da Turbina - {circuit}',
         xaxis_title='Tempo (minutos)',
         yaxis_title='Temperatura (°C)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='black',  # Fundo preto do gráfico
+        paper_bgcolor='black',  # Fundo preto do paper
         font_color='white',
         font_size=16,
         showlegend=True
@@ -202,8 +200,8 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
         title='Redução de Temperatura com Sistemas de Resfriamento',
         xaxis_title='Sistema',
         yaxis_title='Redução de Temperatura (°C)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='black',  # Fundo preto do gráfico
+        paper_bgcolor='black',  # Fundo preto do paper
         font_color='white',
         font_size=16,
         showlegend=True
@@ -218,8 +216,8 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
         title='Emissões de CO₂ com e sem Sistema de Resfriamento',
         xaxis_title='Sistema',
         yaxis_title='Emissões (g/km)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='black',  # Fundo preto do gráfico
+        paper_bgcolor='black',  # Fundo preto do paper
         font_color='white',
         font_size=16,
         showlegend=True
