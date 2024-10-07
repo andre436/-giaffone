@@ -1,105 +1,239 @@
+import os
 import dash
-from dash import dcc, html
+from dash import dcc, html, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
-import plotly.graph_objs as go
+import plotly.graph_objects as go
+import numpy as np
+import threading
+import time
 
-# Inicializando o app Dash
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
+# Função para simular a corrida com e sem arrefecimento
+def simulate_race_with_cooling(circuit):
+    time_data = np.linspace(0, 90, 180)  # Tempo em minutos (1h30)
+    
+    # Definindo temperaturas baseadas em cada circuito
+    circuit_temp_map = {
+        'Campo Grande': 28,
+        'Goiânia': 30,
+        'Londrina': 20,
+        'Santa Cruz': 24,
+        'Interlagos': 18,
+        'Cascavel': 22,
+        'Tarumã': 16,
+        'Curvelo': 26,
+    }
 
-# Layout do app
-app.layout = html.Div([
-    dbc.Container([
-        html.H1('Simulação de Resfriamento da Turbina - Fórmula Truck', style={'textAlign': 'center'}),
-        
-        # Seleção do circuito
-        html.Label('Selecione o Circuito:'),
-        dcc.Dropdown(
-            id='circuit-dropdown',
-            options=[
-                {'label': 'Campo Grande/MS - 17/03', 'value': 'Campo Grande/MS - 17/03'},
-                {'label': 'Goiânia/GO - 14/04', 'value': 'Goiânia/GO - 14/04'},
-                {'label': 'Londrina/PR - 12/05', 'value': 'Londrina/PR - 12/05'},
-                {'label': 'Santa Cruz (Potenza/MG) - 16/06', 'value': 'Santa Cruz (Potenza/MG) - 16/06'},
-                {'label': 'Interlagos/SP - 04/08', 'value': 'Interlagos/SP - 04/08'},
-                {'label': 'Cascavel/PR - 01/09', 'value': 'Cascavel/PR - 01/09'},
-                {'label': 'Tarumã/RS - 13/10', 'value': 'Tarumã/RS - 13/10'},
-                {'label': 'Curvelo/MG - 17/11', 'value': 'Curvelo/MG - 17/11'},
-                {'label': 'Goiânia/GO - 08/12', 'value': 'Goiânia/GO - 08/12'}
-            ],
-            value='Campo Grande/MS - 17/03',
-            style={'margin-bottom': '20px'}
+    base_temp = circuit_temp_map.get(circuit, 25)  # Temperatura padrão
+
+    # Temperatura sem arrefecimento
+    temperature_without_cooling = base_temp + 20 * np.sin(2 * np.pi * time_data / 20) + np.random.normal(0, 3, len(time_data))
+
+    # Temperatura com arrefecimento
+    temperature_with_cooling = temperature_without_cooling - 10 * np.sin(2 * np.pi * time_data / 20) - np.random.normal(0, 2, len(time_data))
+
+    return time_data, temperature_without_cooling, temperature_with_cooling
+
+# Cálculos de Transferência de Calor
+def calculate_heat_transfer():
+    # Dados do sistema
+    T_in = 550  # °C
+    T_intercooler_out = 120  # °C
+    T_new_system_out = 80  # °C
+    intercooler_efficiency = 0.7
+    new_system_efficiency = 0.9
+
+    # Variação de temperatura
+    delta_T_intercooler = T_in - T_intercooler_out  # °C
+    delta_T_new_system = T_in - T_new_system_out  # °C
+
+    # Emissões de CO₂
+    emissions_current = 550  # g/km
+    emissions_reduction = 0.05  # 5%
+    emissions_new_system = emissions_current * (1 - emissions_reduction)  # g/km
+
+    return delta_T_intercooler, delta_T_new_system, emissions_current, emissions_new_system
+
+# Iniciar o app Dash
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+
+# Layout do aplicativo
+app.layout = dbc.Container([
+    dbc.Row(
+        dbc.Col(html.Div(id='circuit-selection', children=[
+            html.Div([
+                html.Button('Campo Grande', id='btn-campo-grande', className='circuit-btn', n_clicks=0),
+                html.Button('Goiânia', id='btn-goiania', className='circuit-btn', n_clicks=0),
+                html.Button('Londrina', id='btn-londrina', className='circuit-btn', n_clicks=0),
+                html.Button('Santa Cruz', id='btn-santa-cruz', className='circuit-btn', n_clicks=0),
+                html.Button('Interlagos', id='btn-interlagos', className='circuit-btn', n_clicks=0),
+                html.Button('Cascavel', id='btn-cascavel', className='circuit-btn', n_clicks=0),
+                html.Button('Tarumã', id='btn-taruma', className='circuit-btn', n_clicks=0),
+                html.Button('Curvelo', id='btn-curvelo', className='circuit-btn', n_clicks=0),
+            ], className='button-grid'),
+        ]), width=12)
+    ),
+    dbc.Row([html.Div(id='dashboard-container', style={'display': 'none'})]),  # Oculto até que um circuito seja selecionado
+
+    # Modal para exibir os gráficos
+    dbc.Modal([
+        dbc.ModalHeader("Gráficos da Corrida"),
+        dbc.ModalBody(
+            dbc.Container(id='modal-content', fluid=True)
         ),
-        
-        # Botão para gerar gráficos
-        dbc.Button('Gerar Gráficos', id='generate-graphs-btn', color='primary'),
-        
-        # Modal para exibir os gráficos
-        dbc.Modal(
-            [
-                dbc.ModalHeader('Análise dos Dados'),
-                dbc.ModalBody(id='graphs-modal-content')
-            ],
-            id='graphs-modal',
-            size='lg'
-        )
-    ])
-])
+        dbc.ModalFooter(
+            dbc.Button("Fechar", id='close-modal', className='ml-auto')
+        ),
+    ], id='modal', size='lg'),
 
-# Função para gerar os gráficos com base no circuito selecionado
+], fluid=True, style={'height': '100vh', 'width': '100vw', 'padding': '0', 'margin': '0', 'backgroundColor': 'black'})
+
+# Estilos adicionais via CSS
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <style>
+            body { 
+                margin: 0; 
+                background-image: url('C:/Users/User/Desktop/python-getting-started/IMG/IMAGEM DE FUNDO.jpg'); 
+                background-size: cover; 
+                background-position: center; 
+            }
+            .button-grid {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+            }
+            .circuit-btn {
+                background-color: transparent;
+                color: white;
+                border: none;
+                font-size: 3rem;
+                font-weight: bold;
+                text-transform: uppercase;
+                margin: 10px;
+                transition: all 0.3s ease;
+                cursor: pointer;
+            }
+            .circuit-btn:hover {
+                letter-spacing: 2px;
+                color: cyan;
+            }
+        </style>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+'''
+
+# Função para atualizar o gráfico com base no circuito selecionado
 @app.callback(
-    [dash.dependencies.Output('graphs-modal', 'is_open'),
-     dash.dependencies.Output('graphs-modal-content', 'children')],
-    [dash.dependencies.Input('generate-graphs-btn', 'n_clicks')],
-    [dash.dependencies.State('circuit-dropdown', 'value')]
+    Output('modal', 'is_open'),
+    Output('modal-content', 'children'),
+    [Input('btn-campo-grande', 'n_clicks'),
+     Input('btn-goiania', 'n_clicks'),
+     Input('btn-londrina', 'n_clicks'),
+     Input('btn-santa-cruz', 'n_clicks'),
+     Input('btn-interlagos', 'n_clicks'),
+     Input('btn-cascavel', 'n_clicks'),
+     Input('btn-taruma', 'n_clicks'),
+     Input('btn-curvelo', 'n_clicks'),
+     Input('close-modal', 'n_clicks')],
+    [State('modal', 'is_open')]
 )
-def generate_graphs(n_clicks, circuit):
-    if n_clicks is None:
-        return False, None
+def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_interlagos, n_cascavel, n_taruma, n_curvelo, close_n_clicks, is_open):
+    ctx = callback_context
+    if not ctx.triggered:
+        return is_open, dash.no_update
 
-    # Dados simulados de temperatura e eficiência
-    time_data = list(range(0, 181, 15))  # 0 a 180 minutos (3 horas)
-    temp_without = [180, 175, 170, 165, 160, 155, 150, 145, 140, 135, 130, 125, 120]  # Sem arrefecimento
-    temp_with = [180, 170, 160, 150, 140, 130, 120, 110, 105, 100, 95, 90, 85]  # Com arrefecimento
-    efficiency_without = [80, 78, 75, 73, 70, 68, 65, 63, 60, 58, 55, 52, 50]  # Sem arrefecimento
-    efficiency_with = [80, 82, 85, 87, 90, 92, 95, 97, 100, 102, 105, 108, 110]  # Com arrefecimento
-    rpm = 3500  # RPM fixo para simplificar
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
-    # Gráfico de Temperatura
+    if triggered_id == 'close-modal':
+        return False, dash.no_update
+
+    # Get the circuit name
+    circuit = triggered_id.replace('btn-', '').replace('-', ' ').title()
+    if circuit == 'Goiania':
+        circuit = 'Goiânia'
+    elif circuit == 'Taruma':
+        circuit = 'Tarumã'
+
+    # Simular novos dados de temperatura com base no circuito selecionado
+    time_data, temp_without, temp_with = simulate_race_with_cooling(circuit)
+
+    # Gráficos de temperatura
     fig_temp = go.Figure()
-    fig_temp.add_trace(go.Scatter(x=time_data, y=temp_without, mode='lines+markers', name='Sem Arrefecimento',
-                                  line=dict(color='red', width=2)))
-    fig_temp.add_trace(go.Scatter(x=time_data, y=temp_with, mode='lines+markers', name='Com Arrefecimento',
-                                  line=dict(color='blue', width=2), fill='tozeroy'))
-    fig_temp.update_layout(title=f'Temperatura ao Longo do Tempo - {circuit}',
-                           xaxis_title='Tempo (minutos)', yaxis_title='Temperatura (°C)',
-                           template='plotly_dark')
+    fig_temp.add_trace(go.Scatter(x=time_data, y=temp_without, mode='lines+markers', name='Sem Arrefecimento', 
+                                  line=dict(color='red', width=2), fill='tozeroy'))
+    fig_temp.add_trace(go.Scatter(x=time_data, y=temp_with, mode='lines+markers', name='Com Arrefecimento', 
+                                  line=dict(color='cyan', width=2), fill='tozeroy'))
+    fig_temp.update_layout(
+        title=f'Análise da Temperatura da Turbina - {circuit}',
+        xaxis_title='Tempo (minutos)',
+        yaxis_title='Temperatura (°C)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font_color='white',
+        font_size=16,
+        showlegend=True
+    )
 
-    # Gráfico de Eficiência
-    fig_efficiency = go.Figure()
-    fig_efficiency.add_trace(go.Scatter(x=time_data, y=efficiency_without, mode='lines+markers',
-                                        name='Eficiência Sem Arrefecimento', line=dict(color='orange', width=2)))
-    fig_efficiency.add_trace(go.Scatter(x=time_data, y=efficiency_with, mode='lines+markers',
-                                        name='Eficiência Com Arrefecimento', line=dict(color='green', width=2)))
-    fig_efficiency.update_layout(title=f'Eficiência ao Longo do Tempo - {circuit}',
-                                 xaxis_title='Tempo (minutos)', yaxis_title='Eficiência (%)',
-                                 template='plotly_dark')
+    # Cálculos de Transferência de Calor
+    delta_T_intercooler, delta_T_new_system, emissions_current, emissions_new_system = calculate_heat_transfer()
 
-    # Gráfico de Comparação de RPM
-    fig_rpm = go.Figure()
-    fig_rpm.add_trace(go.Bar(x=[circuit], y=[rpm], name='RPM', marker_color='purple'))
-    fig_rpm.update_layout(title='Comparação de RPM por Circuito',
-                          xaxis_title='Circuito', yaxis_title='RPM',
-                          template='plotly_dark')
+    # Gráficos de Transferência de Calor
+    fig_heat_transfer = go.Figure()
+    fig_heat_transfer.add_trace(go.Bar(x=['Intercooler Atual', 'Novo Sistema de Resfriamento'],
+                                       y=[delta_T_intercooler, delta_T_new_system],
+                                       marker_color=['red', 'cyan'], name='Redução de Temperatura (°C)'))
+    fig_heat_transfer.update_layout(
+        title='Redução de Temperatura com Sistemas de Resfriamento',
+        xaxis_title='Sistema',
+        yaxis_title='Redução de Temperatura (°C)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font_color='white',
+        font_size=16,
+        showlegend=True
+    )
 
-    # Conteúdo do modal com todos os gráficos
-    modal_content = dbc.Row([
-        dbc.Col(dcc.Graph(figure=fig_temp), width=12),
-        dbc.Col(dcc.Graph(figure=fig_efficiency), width=12),
-        dbc.Col(dcc.Graph(figure=fig_rpm), width=12),
+    # Gráficos de Emissões de CO₂
+    fig_emissions = go.Figure()
+    fig_emissions.add_trace(go.Bar(x=['Sistema Atual', 'Sistema Adicional'],
+                                   y=[emissions_current, emissions_new_system],
+                                   marker_color=['red', 'cyan'], name='Emissões (g/km)'))
+    fig_emissions.update_layout(
+        title='Emissões de CO₂ com e sem Sistema de Resfriamento',
+        xaxis_title='Sistema',
+        yaxis_title='Emissões (g/km)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font_color='white',
+        font_size=16,
+        showlegend=True
+    )
+
+    # Conteúdo do modal com gráficos
+    modal_content = html.Div([
+        dcc.Graph(figure=fig_temp),
+        dcc.Graph(figure=fig_heat_transfer),
+        dcc.Graph(figure=fig_emissions),
     ])
 
     return True, modal_content
-  
+
 # Rodar o servidor
 if __name__ == '__main__':
     app.run_server(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8050)))
