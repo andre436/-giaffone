@@ -6,10 +6,9 @@ import plotly.graph_objects as go
 import numpy as np
 import threading
 import time
-from io import BytesIO
 
 # Função para simular a corrida com e sem arrefecimento
-def simulate_race_with_cooling(circuit):
+def simulate_race_with_cooling(circuit, intercooler_efficiency, additional_cooling_efficiency):
     time_data = np.linspace(0, 90, 180)  # Tempo em minutos (1h30)
     
     # Definindo temperaturas baseadas em cada circuito
@@ -24,20 +23,37 @@ def simulate_race_with_cooling(circuit):
         'Curvelo': 26,
     }
 
-    base_temp = circuit_temp_map.get(circuit, 25)  # Temperatura padrão
+    base_temp = circuit_temp_map.get(circuit, 25)  # Temperatura padrão do ambiente
 
-    # Temperatura sem arrefecimento
-    temperature_without_cooling = base_temp + 20 * np.sin(2 * np.pi * time_data / 20) + np.random.normal(0, 3, len(time_data))
+    # Condições iniciais da turbina
+    initial_temp_no_cooling = 550  # Temperatura de admissão sem resfriamento (°C)
+    intercooler_temp = 120  # Temperatura com intercooler (°C)
 
-    # Temperatura com arrefecimento
-    temperature_with_cooling = temperature_without_cooling - 10 * np.sin(2 * np.pi * time_data / 20) - np.random.normal(0, 2, len(time_data))
+    # Cálculos de eficiência térmica
+    intercooler_temp_drop = initial_temp_no_cooling - intercooler_temp  # Redução com intercooler
+    intercooler_effective_temp = intercooler_temp - intercooler_temp_drop * (1 - intercooler_efficiency)
+
+    # Temperatura com arrefecimento adicional
+    final_temp_with_cooling = intercooler_temp - intercooler_temp_drop * additional_cooling_efficiency
+
+    # Simulando as curvas de temperatura ao longo do tempo
+    temperature_without_cooling = initial_temp_no_cooling + base_temp * np.sin(2 * np.pi * time_data / 20) + np.random.normal(0, 3, len(time_data))
+    temperature_with_cooling = temperature_without_cooling - (initial_temp_no_cooling - final_temp_with_cooling) * (np.sin(2 * np.pi * time_data / 20) + np.random.normal(0, 2, len(time_data)))
 
     return time_data, temperature_without_cooling, temperature_with_cooling
 
+# Função para calcular emissões de CO₂
+def calculate_co2_emissions(initial_emissions, cooling_efficiency):
+    # Redução estimada nas emissões com base na eficiência do sistema de resfriamento
+    emission_reduction = initial_emissions * (1 - 0.05 * cooling_efficiency)
+    return emission_reduction
+
 # Função para gerar o conteúdo do arquivo TXT
-def generate_txt_content(circuit, rpm):
+def generate_txt_content(circuit, rpm, final_temp_with_cooling, co2_emissions):
     content = f"Circuito: {circuit}\n"
     content += f"RPM: {rpm}\n"
+    content += f"Temperatura com sistema de resfriamento: {final_temp_with_cooling:.2f} °C\n"
+    content += f"Emissões de CO₂: {co2_emissions:.2f} g/km\n"
     content += "Ações:\n"
     content += "- Acender LED 1\n"
     content += "- Após, acender LED 2 e apagar LED 1\n"
@@ -82,57 +98,6 @@ app.layout = dbc.Container([
 
 ], fluid=True, style={'height': '100vh', 'width': '100vw', 'padding': '0', 'margin': '0', 'backgroundColor': 'black'})
 
-# Estilos adicionais via CSS
-app.index_string = '''
-<!DOCTYPE html>
-<html>
-    <head>
-        {%metas%}
-        <title>{%title%}</title>
-        {%favicon%}
-        {%css%}
-        <style>
-            body { 
-                margin: 0; 
-                background-image: url('C:/Users/User/Desktop/python-getting-started/IMG/IMAGEM DE FUNDO.jpg'); 
-                background-size: cover; 
-                background-position: center; 
-            }
-            .button-grid {
-                display: flex;
-                flex-wrap: wrap;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-            }
-            .circuit-btn {
-                background-color: transparent;
-                color: white;
-                border: none;
-                font-size: 3rem;
-                font-weight: bold;
-                text-transform: uppercase;
-                margin: 10px;
-                transition: all 0.3s ease;
-                cursor: pointer;
-            }
-            .circuit-btn:hover {
-                letter-spacing: 2px;
-                color: cyan;
-            }
-        </style>
-    </head>
-    <body>
-        {%app_entry%}
-        <footer>
-            {%config%}
-            {%scripts%}
-            {%renderer%}
-        </footer>
-    </body>
-</html>
-'''
-
 # Função para atualizar o gráfico e gerar o arquivo TXT com base no circuito selecionado
 @app.callback(
     Output('modal', 'is_open'),
@@ -159,7 +124,7 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
     if triggered_id == 'close-modal':
         return False, dash.no_update, dash.no_update
 
-    # Get the circuit name
+    # Map the circuit name
     circuit = triggered_id.replace('btn-', '').replace('-', ' ').title()
     if circuit == 'Goiania':
         circuit = 'Goiânia'
@@ -179,24 +144,18 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
     }
     rpm = circuit_rpm_map.get(circuit, 3000)
 
-    # Generate TXT content
-    txt_content = generate_txt_content(circuit, rpm)
-
-    # Simular as ações em uma thread separada
-    def simulate_actions():
-        print(f"Acendendo LED 1")
-        time.sleep(1)
-        print(f"Acendendo LED 2 e apagando LED 1")
-        time.sleep(1)
-        print(f"Ligando Ventoinha 1 e Ventoinha 2")
-        time.sleep(180)  # 3 minutos
-        print(f"Desligando Ventoinha 1 e Ventoinha 2")
-        print(f"Desligando LED 2")
-
-    threading.Thread(target=simulate_actions).start()
+    intercooler_efficiency = 0.70
+    additional_cooling_efficiency = 0.90
 
     # Simular novos dados de temperatura com base no circuito selecionado
-    time_data, temp_without, temp_with = simulate_race_with_cooling(circuit)
+    time_data, temp_without, temp_with = simulate_race_with_cooling(circuit, intercooler_efficiency, additional_cooling_efficiency)
+
+    # Calculando as emissões de CO2
+    initial_emissions = 550  # Emissões iniciais em g/km
+    co2_emissions = calculate_co2_emissions(initial_emissions, additional_cooling_efficiency)
+
+    # Gerar conteúdo do arquivo TXT
+    txt_content = generate_txt_content(circuit, rpm, temp_with[-1], co2_emissions)
 
     # Gráficos
     fig_temp = go.Figure()
@@ -205,34 +164,15 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
     fig_temp.add_trace(go.Scatter(x=time_data, y=temp_with, mode='lines+markers', name='Com Arrefecimento', 
                                   line=dict(color='cyan', width=2), fill='tozeroy'))
     fig_temp.update_layout(
-        title=f'Análise da Temperatura da Turbina - {circuit}',
-        xaxis_title='Tempo (minutos)',
+        title=f'Análise de Temperatura no Circuito de {circuit}',
+        xaxis_title='Tempo (min)',
         yaxis_title='Temperatura (°C)',
         plot_bgcolor='black',
         paper_bgcolor='black',
-        font=dict(color='white'),
-        yaxis=dict(range=[0, 100]),
-        xaxis=dict(showgrid=True, gridcolor='gray'),
+        font_color='white'
     )
 
-    performance_without_cooling = 100 - (temp_without - 70) * 0.5
-    performance_with_cooling = 100 - (temp_with - 70) * 0.5
-    fig_perf = go.Figure()
-    fig_perf.add_trace(go.Scatter(x=time_data, y=performance_without_cooling, mode='lines', name='Desempenho Sem Arrefecimento', line=dict(color='red')))
-    fig_perf.add_trace(go.Scatter(x=time_data, y=performance_with_cooling, mode='lines', name='Desempenho Com Arrefecimento', line=dict(color='cyan')))
-    fig_perf.update_layout(
-        title='Desempenho do Motor',
-        xaxis_title='Tempo (minutos)',
-        yaxis_title='Desempenho (%)',
-        plot_bgcolor='black',
-        paper_bgcolor='black',
-        font=dict(color='white'),
-    )
-
-    # Preparar o arquivo para download
-    return True, [dcc.Graph(figure=fig_temp), dcc.Graph(figure=fig_perf)], dcc.send_bytes(
-        lambda buffer: buffer.write(txt_content.encode()), filename=f"{circuit}.txt"
-    )
+    return True, dcc.Graph(figure=fig_temp), {'content': txt_content, 'filename': f'{circuit}_dados_corrida.txt'}
 
 # Rodar o servidor
 if __name__ == '__main__':
