@@ -1,9 +1,11 @@
-import os 
+import os
 import dash
 from dash import dcc, html, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 import numpy as np
+import threading
+import time
 
 # Função para simular a corrida com e sem arrefecimento
 def simulate_race_with_cooling(circuit):
@@ -33,6 +35,7 @@ def simulate_race_with_cooling(circuit):
 
 # Cálculos de Transferência de Calor
 def calculate_heat_transfer():
+    # Dados do sistema
     T_in = 550  # °C
     T_intercooler_out = 120  # °C
     T_new_system_out = 80  # °C
@@ -73,17 +76,67 @@ app.layout = dbc.Container([
 
     # Modal para exibir os gráficos
     dbc.Modal([
-        dbc.ModalHeader("Gráficos da Corrida", style={'backgroundColor': 'black', 'color': 'white'}),
+        dbc.ModalHeader("Gráficos da Corrida"),
         dbc.ModalBody(
-            dbc.Container(id='modal-content', fluid=True),
-            style={'backgroundColor': 'black', 'color': 'white'}  # Fundo e texto do corpo do modal
+            dbc.Container(id='modal-content', fluid=True)
         ),
         dbc.ModalFooter(
-            dbc.Button("Fechar", id='close-modal', className='ml-auto', style={'backgroundColor': 'black', 'color': 'white'})
+            dbc.Button("Fechar", id='close-modal', className='ml-auto')
         ),
-    ], id='modal', size='lg', style={'backgroundColor': 'black'}),  # Fundo preto no modal inteiro
+    ], id='modal', size='lg'),
 
 ], fluid=True, style={'height': '100vh', 'width': '100vw', 'padding': '0', 'margin': '0', 'backgroundColor': 'black'})
+
+# Estilos adicionais via CSS
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <style>
+            body { 
+                margin: 0; 
+                background-image: url('C:/Users/User/Desktop/python-getting-started/IMG/IMAGEM DE FUNDO.jpg'); 
+                background-size: cover; 
+                background-position: center; 
+            }
+            .button-grid {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+            }
+            .circuit-btn {
+                background-color: transparent;
+                color: white;
+                border: none;
+                font-size: 3rem;
+                font-weight: bold;
+                text-transform: uppercase;
+                margin: 10px;
+                transition: all 0.3s ease;
+                cursor: pointer;
+            }
+            .circuit-btn:hover {
+                letter-spacing: 2px;
+                color: cyan;
+            }
+        </style>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+'''
 
 # Função para atualizar o gráfico com base no circuito selecionado
 @app.callback(
@@ -130,77 +183,81 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
         title=f'Análise da Temperatura da Turbina - {circuit}',
         xaxis_title='Tempo (minutos)',
         yaxis_title='Temperatura (°C)',
-        plot_bgcolor='black',  # Fundo preto do gráfico
-        paper_bgcolor='black',  # Fundo preto do paper
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
         font_color='white',
         font_size=16,
         showlegend=True
     )
+
+    # Texto explicativo para o gráfico de temperatura
+    temp_explanation = html.P("Esse gráfico mostra a variação de temperatura da turbina ao longo do tempo. Com o sistema de arrefecimento, observa-se uma redução significativa na temperatura média, "
+                              "permitindo uma operação mais eficiente e menos sujeita a falhas térmicas. A diferença de temperatura é calculada usando os valores de base definidos para cada circuito, "
+                              "com simulação de variações temporais baseadas em senos.")
 
     # Cálculos de Transferência de Calor
     delta_T_intercooler, delta_T_new_system, emissions_current, emissions_new_system = calculate_heat_transfer()
 
     # Gráficos de Transferência de Calor
     fig_heat_transfer = go.Figure()
-    fig_heat_transfer.add_trace(go.Bar(x=['Intercooler Atual', 'Novo Sistema de Resfriamento'],
-                                       y=[delta_T_intercooler, delta_T_new_system],
-                                       marker_color=['red', 'cyan'], name='Redução de Temperatura (°C)'))
+    fig_heat_transfer.add_trace(go.Bar(
+        x=['Intercooler Atual', 'Novo Sistema'],
+        y=[delta_T_intercooler, delta_T_new_system],
+        name='Variação de Temperatura',
+        marker_color=['blue', 'green']
+    ))
     fig_heat_transfer.update_layout(
-        title='Redução de Temperatura com Sistemas de Resfriamento',
+        title='Transferência de Calor',
         xaxis_title='Sistema',
-        yaxis_title='Redução de Temperatura (°C)',
-        plot_bgcolor='black',  # Fundo preto do gráfico
-        paper_bgcolor='black',  # Fundo preto do paper
+        yaxis_title='Variação de Temperatura (°C)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
         font_color='white',
         font_size=16,
-        showlegend=True
+        showlegend=False
     )
 
-    # Gráficos de Emissões de CO₂
+    # Texto explicativo para o gráfico de Transferência de Calor
+    heat_transfer_explanation = html.P("A transferência de calor é um fator crítico no desempenho da turbina. O gráfico compara a eficiência entre o sistema atual (Intercooler) e o novo sistema de arrefecimento proposto. "
+                                       "A diferença de temperatura foi calculada usando a fórmula de variação de temperatura com base na eficiência de cada sistema. O novo sistema de arrefecimento apresenta uma eficiência superior, "
+                                       "reduzindo a temperatura de saída e potencialmente aumentando a durabilidade da turbina.")
+
+    # Gráficos de Emissões de CO2
     fig_emissions = go.Figure()
-    fig_emissions.add_trace(go.Bar(x=['Sistema Atual', 'Sistema Adicional'],
-                                   y=[emissions_current, emissions_new_system],
-                                   marker_color=['red', 'cyan'], name='Emissões (g/km)'))
+    fig_emissions.add_trace(go.Bar(
+        x=['Sistema Atual', 'Novo Sistema'],
+        y=[emissions_current, emissions_new_system],
+        name='Emissões de CO2',
+        marker_color=['darkred', 'darkgreen']
+    ))
     fig_emissions.update_layout(
-        title='Emissões de CO₂ com e sem Sistema de Resfriamento',
+        title='Redução das Emissões de CO2',
         xaxis_title='Sistema',
-        yaxis_title='Emissões (g/km)',
-        plot_bgcolor='black',  # Fundo preto do gráfico
-        paper_bgcolor='black',  # Fundo preto do paper
+        yaxis_title='Emissões de CO2 (g/km)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
         font_color='white',
         font_size=16,
-        showlegend=True
+        showlegend=False
     )
 
-    # Texto explicativo
-    explanatory_text = html.Div([
-        html.P(
-            """
-            A melhoria no sistema de arrefecimento contribui significativamente para reduzir a temperatura da turbina.
-            Com o novo sistema, a eficiência aumentada reduz a temperatura de saída para 80°C, em comparação com os 120°C 
-            do sistema intercooler atual. Isso é alcançado devido à maior eficiência do novo sistema (90% contra 70% do intercooler),
-            resultando em uma variação de temperatura maior. Além disso, a redução de emissões de CO₂ é estimada em 5% 
-            para o novo sistema, reduzindo de 550 g/km para aproximadamente 522,5 g/km.
-            """
-        ),
-        html.P(
-            """
-            O cálculo da variação de temperatura é baseado na fórmula:
-            ΔT = T_in - T_out, onde:
-            T_in = 550°C, T_out_intercooler = 120°C, e T_out_novo_sistema = 80°C.
-            """
-        )
-    ], style={'color': 'white', 'font-size': '16px'})
+    # Texto explicativo para o gráfico de Emissões
+    emissions_explanation = html.P("O gráfico demonstra o impacto do novo sistema na redução das emissões de CO2. A redução é estimada em 5%, comparando as emissões atuais com as do novo sistema. "
+                                   "Esses valores são calculados com base nas emissões por km do sistema atual e na eficiência de arrefecimento do novo sistema, que promove uma combustão mais limpa e menos poluente.")
 
-    # Conteúdo do modal com gráficos e texto explicativo
-    modal_content = html.Div([
+    # Organização dos gráficos e explicações no layout
+    return True, [
         dcc.Graph(figure=fig_temp),
+        temp_explanation,
         dcc.Graph(figure=fig_heat_transfer),
+        heat_transfer_explanation,
         dcc.Graph(figure=fig_emissions),
-        explanatory_text  # Adicionando o texto explicativo
-    ])
+        emissions_explanation,
+    ]
 
-    return True, modal_content
+if __name__ == '__main__':
+    app.run_server(debug=True)
+
 
 # Rodar o servidor
 if __name__ == '__main__':
