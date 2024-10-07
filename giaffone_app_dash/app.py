@@ -85,57 +85,6 @@ app.layout = dbc.Container([
 
 ], fluid=True, style={'height': '100vh', 'width': '100vw', 'padding': '0', 'margin': '0', 'backgroundColor': 'black'})
 
-# Estilos adicionais via CSS
-app.index_string = '''
-<!DOCTYPE html>
-<html>
-    <head>
-        {%metas%}
-        <title>{%title%}</title>
-        {%favicon%}
-        {%css%}
-        <style>
-            body { 
-                margin: 0; 
-                background-image: url('C:/Users/User/Desktop/python-getting-started/IMG/IMAGEM DE FUNDO.jpg'); 
-                background-size: cover; 
-                background-position: center; 
-            }
-            .button-grid {
-                display: flex;
-                flex-wrap: wrap;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-            }
-            .circuit-btn {
-                background-color: transparent;
-                color: white;
-                border: none;
-                font-size: 3rem;
-                font-weight: bold;
-                text-transform: uppercase;
-                margin: 10px;
-                transition: all 0.3s ease;
-                cursor: pointer;
-            }
-            .circuit-btn:hover {
-                letter-spacing: 2px;
-                color: cyan;
-            }
-        </style>
-    </head>
-    <body>
-        {%app_entry%}
-        <footer>
-            {%config%}
-            {%scripts%}
-            {%renderer%}
-        </footer>
-    </body>
-</html>
-'''
-
 # Função para atualizar o gráfico com base no circuito selecionado
 @app.callback(
     Output('modal', 'is_open'),
@@ -223,11 +172,32 @@ def display_dashboard(n_campo_grande, n_goiania, n_londrina, n_santa_cruz, n_int
         showlegend=True
     )
 
-    # Conteúdo do modal com gráficos
+    # Texto explicativo
+    explanatory_text = html.Div([
+        html.P(
+            """
+            A melhoria no sistema de arrefecimento contribui significativamente para reduzir a temperatura da turbina.
+            Com o novo sistema, a eficiência aumentada reduz a temperatura de saída para 80°C, em comparação com os 120°C 
+            do sistema intercooler atual. Isso é alcançado devido à maior eficiência do novo sistema (90% contra 70% do intercooler),
+            resultando em uma variação de temperatura maior. Além disso, a redução de emissões de CO₂ é estimada em 5% 
+            para o novo sistema, reduzindo de 550 g/km para aproximadamente 522,5 g/km.
+            """
+        ),
+        html.P(
+            """
+            O cálculo da variação de temperatura é baseado na fórmula:
+            ΔT = T_in - T_out, onde:
+            T_in = 550°C, T_out_intercooler = 120°C, e T_out_novo_sistema = 80°C.
+            """
+        )
+    ], style={'color': 'white', 'font-size': '16px'})
+
+    # Conteúdo do modal com gráficos e texto explicativo
     modal_content = html.Div([
         dcc.Graph(figure=fig_temp),
         dcc.Graph(figure=fig_heat_transfer),
         dcc.Graph(figure=fig_emissions),
+        explanatory_text  # Adicionando o texto explicativo
     ])
 
     return True, modal_content
